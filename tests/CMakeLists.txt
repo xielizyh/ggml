@@ -29,6 +29,7 @@ endif()
 if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "aarch64")
     message(STATUS "ARM detected")
     #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcpu=apple-m1")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=armv8.2-a+fp16+simd")
 elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64le" OR ${CMAKE_SYSTEM_PROCESSOR} MATCHES "ppc64")
     message(STATUS "PPC64 detected")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mpower9-vector")
@@ -237,6 +238,8 @@ if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" AND NOT GGML_NO_ACCELERATE)
     set_property(TEST ${TEST_TARGET} PROPERTY ENVIRONMENT "LLVM_PROFILE_FILE=${TEST_TARGET}.profraw")
 endif()
 
+# TODO 屏蔽，因为round函数未找到
+if(1)
 #
 # test-mul-mat2
 
@@ -248,6 +251,7 @@ set_property(TEST ${TEST_TARGET} PROPERTY ENVIRONMENT "LLVM_PROFILE_FILE=${TEST_
 
 if (MATH_LIBRARY)
     target_link_libraries(test-mul-mat2 PRIVATE ${MATH_LIBRARY})
+endif()
 endif()
 
 #

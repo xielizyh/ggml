@@ -252,7 +252,7 @@ int main(int argc, const char ** argv) {
         const clock_t end = clock();
         const uint64_t end_us = get_time_us();
         printf("%s: elapsed ticks: %ld\n",  __func__, end - start);
-        printf("%s: elapsed us:    %llu / %f ms\n",  __func__, end_us - start_us, (end_us - start_us) / 1000.0 / nIter);
+        printf("%s: elapsed us:    %lu / %f ms\n",  __func__, end_us - start_us, (end_us - start_us) / 1000.0 / nIter);
     }
 
     printf("%f\n", sum);
