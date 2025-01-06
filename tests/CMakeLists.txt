@@ -239,7 +239,7 @@ if (${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm" AND NOT GGML_NO_ACCELERATE)
 endif()
 
 # TODO 屏蔽，因为round函数未找到
-if(1)
+if(0)
 #
 # test-mul-mat2
 
