@@ -32,7 +32,7 @@ int main(void)
     ggml_set_f32(a, 3.0f);
     ggml_set_f32(b, 4.0f);
 
-    ggml_graph_compute_with_ctx(ctx, gf, GGML_DEFAULT_N_THREADS);
+    ggml_graph_compute_with_ctx(ctx, gf, 1);
 
     printf("f = %f\n", ggml_get_f32_1d(f, 0));
 
