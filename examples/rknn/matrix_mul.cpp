@@ -20,11 +20,11 @@ struct simple_model {
 };
 
 // initialize the tensors of the model in this case two matrices 2x2
-void load_model(simple_model & model, float * a, float * b, int rows_A, int cols_A, int rows_B, int cols_B) {
+void load_model(simple_model & model, ggml_fp16_t * a, ggml_fp16_t * b, int rows_A, int cols_A, int rows_B, int cols_B) {
     size_t ctx_size = 0;
     {
-        ctx_size += rows_A * cols_A * ggml_type_size(GGML_TYPE_F32); // tensor a
-        ctx_size += rows_B * cols_B * ggml_type_size(GGML_TYPE_F32); // tensor b
+        ctx_size += rows_A * cols_A * ggml_type_size(GGML_TYPE_F16); // tensor a
+        ctx_size += rows_B * cols_B * ggml_type_size(GGML_TYPE_F16); // tensor b
         ctx_size += 2 * ggml_tensor_overhead(), // tensors
         ctx_size += ggml_graph_overhead(); // compute graph
         ctx_size += 1024; // some overhead
@@ -40,8 +40,8 @@ void load_model(simple_model & model, float * a, float * b, int rows_A, int cols
     model.ctx = ggml_init(params);
 
     // create tensors
-    model.a = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, cols_A, rows_A);
-    model.b = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F32, cols_B, rows_B);
+    model.a = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F16, cols_A, rows_A);
+    model.b = ggml_new_tensor_2d(model.ctx, GGML_TYPE_F16, cols_B, rows_B);
 
     memcpy(model.a->data, a, ggml_nbytes(model.a));
     memcpy(model.b->data, b, ggml_nbytes(model.b));
@@ -77,31 +77,40 @@ int main(void) {
     const int rows_A = 4, cols_A = 2;
 
     float matrix_A[rows_A * cols_A] = {
-        2, 8,
-        5, 1,
-        4, 2,
-        8, 6
+        0.2, 0.8,
+        0.5, 0.1,
+        0.4, 0.2,
+        0.8, 0.6
     };
+    ggml_fp16_t matrix_A_f16[rows_A * cols_A];
 
     const int rows_B = 3, cols_B = 2;
     /* Transpose([
-        10, 9, 5,
-        5, 9, 4
+        0.10, 0.9, 0.5,
+        0.5, 0.9, 0.4
     ]) 2 rows, 3 cols */
     float matrix_B[rows_B * cols_B] = {
-        10, 5,
-        9, 9,
-        5, 4
+        0.1, 0.5,
+        0.9, 0.9,
+        0.5, 0.4
     };
+    ggml_fp16_t matrix_B_f16[rows_B * cols_B];
 
+    for (int i = 0; i < rows_A * cols_A; i++) {
+        matrix_A_f16[i] = ggml_fp32_to_fp16(matrix_A[i]);
+    }
+    for (int i = 0; i < rows_B * cols_B; i++) {
+        matrix_B_f16[i] = ggml_fp32_to_fp16(matrix_B[i]);
+    }
+    
     simple_model model;
-    load_model(model, matrix_A, matrix_B, rows_A, cols_A, rows_B, cols_B);
+    load_model(model, matrix_A_f16, matrix_B_f16, rows_A, cols_A, rows_B, cols_B);
 
     // perform computation in cpu
     struct ggml_tensor * result = compute(model);
 
-    // get the result data pointer as a float array to print
-    std::vector<float> out_data(ggml_nelements(result));
+    // get the result data pointer as a ggml_fp16_t array to print
+    std::vector<ggml_fp16_t> out_data(ggml_nelements(result));
     memcpy(out_data.data(), result->data, ggml_nbytes(result));
 
     // expected result:
@@ -116,7 +125,7 @@ int main(void) {
         }
 
         for (int i = 0; i < result->ne[0] /* cols */; i++) {
-            printf(" %.2f", out_data[j * result->ne[0] + i]);
+            printf(" %.2f", ggml_fp16_to_fp32(out_data[j * result->ne[0] + i]));
         }
     }
     printf(" ]\n");

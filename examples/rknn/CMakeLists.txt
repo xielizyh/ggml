@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.6)
 
-# project(rknn)
-
-include_directories(${RKNN_API_PATH}/include)
+project(rknn)
 
 set(TEST_TARGET matrix_mul)
 add_executable(${TEST_TARGET} matrix_mul.cpp)

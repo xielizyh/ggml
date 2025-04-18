@@ -1484,6 +1484,7 @@ static void ggml_vec_dot_f16(int n, float * restrict s, size_t bs, ggml_fp16_t *
     for (int i = np; i < n; ++i) {
         sumf += (ggml_float)(GGML_FP16_TO_FP32(x[i])*GGML_FP16_TO_FP32(y[i]));
     }
+    // printf("rknn_vec_dot_f16: %f\n", sumf);
 #elif defined(GGML_SIMD)
     const int np = (n & ~(GGML_F16_STEP - 1));
 

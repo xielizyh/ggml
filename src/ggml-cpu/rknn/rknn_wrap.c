@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "ggml.h"
+#include "rknn/rknn_wrap.h"
 #include "rknn/include/rknn_api.h"
 #include "rknn/include/rknn_matmul_api.h"
 
@@ -88,6 +89,9 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
         fprintf(stderr, "rknn_matmul_run fail! ret=%d\n", ret);
         goto exit;
     }
+
+    /* 从NPU内存拷贝到CPU内存 */
+    memcpy(C_Matrix, C->virt_addr, io_attr.C.size);
 exit:
     /* 释放NPU内存 */
     rknn_destroy_mem(ctx, A);
