@@ -1469,7 +1469,22 @@ static void ggml_vec_dot_f16(int n, float * restrict s, size_t bs, ggml_fp16_t *
 
     ggml_float sumf = 0.0;
 
-#if defined(GGML_SIMD)
+#if GGML_USE_RKNN
+#include "rknn/rknn_wrap.h"
+    #define GGML_RKNN_F16_STEP   (2048)
+    const int np = (n & ~(GGML_RKNN_F16_STEP - 1));
+    float sum;
+
+    for (int i = 0; i < np; i += GGML_RKNN_F16_STEP) {
+        rknn_vec_dot_f16(&x[i], &y[i], &sum, GGML_RKNN_F16_STEP);
+        sumf += (ggml_float)sum;
+    }
+
+    // leftovers
+    for (int i = np; i < n; ++i) {
+        sumf += (ggml_float)(GGML_FP16_TO_FP32(x[i])*GGML_FP16_TO_FP32(y[i]));
+    }
+#elif defined(GGML_SIMD)
     const int np = (n & ~(GGML_F16_STEP - 1));
 
     GGML_F16_VEC sum[GGML_F16_ARR] = { GGML_F16_VEC_ZERO };
@@ -1492,7 +1507,7 @@ static void ggml_vec_dot_f16(int n, float * restrict s, size_t bs, ggml_fp16_t *
     // leftovers
     for (int i = np; i < n; ++i) {
         sumf += (ggml_float)(GGML_FP16_TO_FP32(x[i])*GGML_FP16_TO_FP32(y[i]));
-    }
+    }    
 #else
     for (int i = 0; i < n; ++i) {
         sumf += (ggml_float)(GGML_FP16_TO_FP32(x[i])*GGML_FP16_TO_FP32(y[i]));
