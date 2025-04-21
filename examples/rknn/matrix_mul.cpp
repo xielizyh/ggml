@@ -86,16 +86,17 @@ int main(void) {
 
     const int rows_B = 3, cols_B = 2;
     /* Transpose([
-        0.10, 0.9, 0.5,
+        1.0, 0.9, 0.5,
         0.5, 0.9, 0.4
     ]) 2 rows, 3 cols */
     float matrix_B[rows_B * cols_B] = {
-        0.1, 0.5,
+        1.0, 0.5,
         0.9, 0.9,
         0.5, 0.4
     };
     ggml_fp16_t matrix_B_f16[rows_B * cols_B];
 
+    // convert float to fp16
     for (int i = 0; i < rows_A * cols_A; i++) {
         matrix_A_f16[i] = ggml_fp32_to_fp16(matrix_A[i]);
     }
@@ -107,16 +108,17 @@ int main(void) {
     load_model(model, matrix_A_f16, matrix_B_f16, rows_A, cols_A, rows_B, cols_B);
 
     // perform computation in cpu
+    // 注意result是GGML_TYPE_F32类型，在ggml_mul_mat函数中创建
     struct ggml_tensor * result = compute(model);
 
-    // get the result data pointer as a ggml_fp16_t array to print
-    std::vector<ggml_fp16_t> out_data(ggml_nelements(result));
+    // get the result data pointer as a float array to print
+    std::vector<float> out_data(ggml_nelements(result));
     memcpy(out_data.data(), result->data, ggml_nbytes(result));
 
     // expected result:
-    // [ 60.00 55.00 50.00 110.00
-    //   90.00 54.00 54.00 126.00
-    //   42.00 29.00 28.00 64.00 ]
+    // [ 0.60 0.55 0.50 1.10
+    //   0.90 0.54 0.54 1.26
+    //   0.42 0.29 0.28 0.64 ]
 
     printf("mul mat (%d x %d) (transposed result):\n[", (int) result->ne[0], (int) result->ne[1]);
     for (int j = 0; j < result->ne[1] /* rows */; j++) {
@@ -125,7 +127,7 @@ int main(void) {
         }
 
         for (int i = 0; i < result->ne[0] /* cols */; i++) {
-            printf(" %.2f", ggml_fp16_to_fp32(out_data[j * result->ne[0] + i]));
+            printf(" %.2f", out_data[j * result->ne[0] + i]);
         }
     }
     printf(" ]\n");
