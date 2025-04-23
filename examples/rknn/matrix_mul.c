@@ -14,6 +14,9 @@
 
 #define MAX_NARGS 2
 
+// 矩阵乘法类型
+#define MATMUL_FP16
+
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
 }
@@ -36,18 +39,30 @@ struct ggml_tensor * get_random_tensor(
         int64_t ne[],
         float fmin,
         float fmax) {
+#ifdef MATMUL_FP16
+    struct ggml_tensor * result = ggml_new_tensor(ctx0, GGML_TYPE_F16, ndims, ne);
+#else
     struct ggml_tensor * result = ggml_new_tensor(ctx0, GGML_TYPE_F32, ndims, ne);
+#endif
 
     switch (ndims) {
         case 1:
             for (int i0 = 0; i0 < ne[0]; i0++) {
+            #ifdef MATMUL_FP16
+                ((ggml_fp16_t *)result->data)[i0] = ggml_fp32_to_fp16(frand()*(fmax - fmin) + fmin);
+            #else
                 ((float *)result->data)[i0] = frand()*(fmax - fmin) + fmin;
+            #endif
             }
             break;
         case 2:
             for (int i1 = 0; i1 < ne[1]; i1++) {
                 for (int i0 = 0; i0 < ne[0]; i0++) {
+                #ifdef MATMUL_FP16
+                    ((ggml_fp16_t *)result->data)[i1*ne[0] + i0] = ggml_fp32_to_fp16(frand()*(fmax - fmin) + fmin);
+                #else
                     ((float *)result->data)[i1*ne[0] + i0] = frand()*(fmax - fmin) + fmin;
+                #endif
                 }
             }
             break;
@@ -55,7 +70,11 @@ struct ggml_tensor * get_random_tensor(
             for (int i2 = 0; i2 < ne[2]; i2++) {
                 for (int i1 = 0; i1 < ne[1]; i1++) {
                     for (int i0 = 0; i0 < ne[0]; i0++) {
+                    #ifdef MATMUL_FP16
+                        ((ggml_fp16_t *)result->data)[i2*ne[1]*ne[0] + i1*ne[0] + i0] = ggml_fp32_to_fp16(frand()*(fmax - fmin) + fmin);
+                    #else
                         ((float *)result->data)[i2*ne[1]*ne[0] + i1*ne[0] + i0] = frand()*(fmax - fmin) + fmin;
+                    #endif
                     }
                 }
             }
@@ -65,7 +84,11 @@ struct ggml_tensor * get_random_tensor(
                 for (int i2 = 0; i2 < ne[2]; i2++) {
                     for (int i1 = 0; i1 < ne[1]; i1++) {
                         for (int i0 = 0; i0 < ne[0]; i0++) {
+                        #ifdef MATMUL_FP16
+                            ((ggml_fp16_t *)result->data)[i3*ne[2]*ne[1]*ne[0] + i2*ne[1]*ne[0] + i1*ne[0] + i0] = ggml_fp32_to_fp16(frand()*(fmax - fmin) + fmin);
+                        #else
                             ((float *)result->data)[i3*ne[2]*ne[1]*ne[0] + i2*ne[1]*ne[0] + i1*ne[0] + i0] = frand()*(fmax - fmin) + fmin;
+                        #endif
                         }
                     }
                 }
@@ -79,13 +102,30 @@ struct ggml_tensor * get_random_tensor(
 }
 
 float get_element(const struct ggml_tensor * t, int idx) {
+#ifdef MATMUL_FP16
+    if (t->type == GGML_TYPE_F16) {
+        return ggml_fp16_to_fp32(((ggml_fp16_t *)t->data)[idx]);
+    } else {
+        return ((float *)t->data)[idx];
+    }
+#else
     return ((float *)t->data)[idx];
+#endif
 }
 
 void set_element(struct ggml_tensor * t, int idx, float value) {
+#ifdef MATMUL_FP16
+    if (t->type == GGML_TYPE_F16) {
+        ((ggml_fp16_t *)t->data)[idx] = ggml_fp32_to_fp16(value);
+    } else {
+        ((float *)t->data)[idx] = value;
+    }
+#else
     ((float *)t->data)[idx] = value;
+#endif
 }
 
+// GGML不支持：ggml_compute_forward_out_prod_f16_f32
 bool check_gradient(
         const char * op_name,
         struct ggml_context * ctx0,
@@ -156,9 +196,18 @@ float mat_get(const struct ggml_tensor * t, int i0, int i1, int i2, int i3) {
     const size_t nb1 = t->nb[1];
     const size_t nb2 = t->nb[2];
     const size_t nb3 = t->nb[3];
-
+#ifdef MATMUL_FP16
+    if (t->type == GGML_TYPE_F16) {
+        return
+            ggml_fp16_to_fp32(*((ggml_fp16_t*) ((char*)t->data + i0*nb0 + i1*nb1 + i2*nb2 + i3*nb3)));
+    } else {
+        return
+            *((float*) ((char*)t->data + i0*nb0 + i1*nb1 + i2*nb2 + i3*nb3));
+    }
+#else
     return
         *((float*) ((char*)t->data + i0*nb0 + i1*nb1 + i2*nb2 + i3*nb3));
+#endif
 }
 
 bool check_mat_mul(
@@ -280,7 +329,11 @@ int main(int argc, const char ** argv) {
                 assert(m->ne[1] == x[0]->ne[1]);
                 assert(m->ne[2] == x[0]->ne[2]);
                 assert(m->ne[3] == x[0]->ne[3]);
-
+            #ifdef MATMUL_FP16 // 由于GGML暂未支持ggml_compute_forward_out_prod_f16_f32，所以这里不用校验梯度的方式  
+                    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+                    ggml_build_forward_expand(gf, m);
+                    ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
+            #else
                 if (ndims <= 2) {
                     check_gradient("mul_mat", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
                 } else {
@@ -288,6 +341,7 @@ int main(int argc, const char ** argv) {
                     ggml_build_forward_expand(gf, m);
                     ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
                 }
+            #endif
 
                 check_mat_mul(m, x[1], x[0]);
             }
@@ -317,7 +371,11 @@ int main(int argc, const char ** argv) {
                 assert(m->ne[1] == x[0]->ne[1]);
                 assert(m->ne[2] == x[0]->ne[2]);
                 assert(m->ne[3] == x[0]->ne[3]);
-
+            #ifdef MATMUL_FP16  // 由于GGML暂未支持ggml_compute_forward_out_prod_f16_f32，所以这里不用校验梯度的方式
+                    struct ggml_cgraph * gf = ggml_new_graph(ctx0);
+                    ggml_build_forward_expand(gf, m);
+                    ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
+            #else
                 if (ndims <= 2) {
                     check_gradient("mul_mat", ctx0, x, f, ndims, nargs, 1e-3f, 1e-3f, INFINITY);
                 } else {
@@ -325,7 +383,7 @@ int main(int argc, const char ** argv) {
                     ggml_build_forward_expand(gf, m);
                     ggml_graph_compute_with_ctx(ctx0, gf, n_threads);
                 }
-
+            #endif
                 check_mat_mul(m, x[1], x[0]);
             }
         }
