@@ -16,6 +16,8 @@
 
 // 矩阵乘法类型
 #define MATMUL_FP16
+// 调试，开启打印
+// #define MATMUL_DEBUG
 
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
@@ -228,7 +230,7 @@ bool check_mat_mul(
     const int64_t n12 = y->ne[1];
     const int64_t n22 = y->ne[2];
     const int64_t n32 = y->ne[3];
-
+#ifdef MATMUL_DEBUG
     printf("x0: [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]\n", n00, n10, n20, n30);
     for (int j = 0; j < n10; ++j) {
         for (int i = 0; i < n00; ++i) {
@@ -254,7 +256,7 @@ bool check_mat_mul(
         }
         printf("\n");
     }
-
+#endif
     for (int i3 = 0; i3 < n32; ++i3) {
         for (int i2 = 0; i2 < n22; ++i2) {
             for (int i1 = 0; i1 < n12; ++i1) {
@@ -298,8 +300,12 @@ int main(int argc, const char ** argv) {
 
     int n_threads = 1;
 
+    const int64_t t_start = ggml_time_us();
+
     for (int iter = 0; iter < niter; ++iter) {
+    #ifdef MATMUL_DEBUG
         printf("test-mul-mat0: iter:%d/%d\n", iter, niter);
+    #endif
         struct ggml_context * ctx0 = ggml_init(params);
 
         get_random_dims(ne, 4);
@@ -319,12 +325,12 @@ int main(int argc, const char ** argv) {
 
                 struct ggml_tensor * m = ggml_mul_mat(ctx0, x[1], x[0]);
                 struct ggml_tensor * f = ggml_sum(ctx0, m);
-
+            #ifdef MATMUL_DEBUG
                 printf("testing: mul_mat, [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "] = [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "] * [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]\n",
                            m->ne[0],    m->ne[1],    m->ne[2],    m->ne[3],
                         x[1]->ne[0], x[1]->ne[1], x[1]->ne[2], x[1]->ne[3],
                         x[0]->ne[0], x[0]->ne[1], x[0]->ne[2], x[0]->ne[3]);
-
+            #endif
                 assert(m->ne[0] == x[1]->ne[1]);
                 assert(m->ne[1] == x[0]->ne[1]);
                 assert(m->ne[2] == x[0]->ne[2]);
@@ -361,12 +367,12 @@ int main(int argc, const char ** argv) {
 
                 struct ggml_tensor * m = ggml_mul_mat(ctx0, x[1], x[0]);
                 struct ggml_tensor * f = ggml_sum(ctx0, m);
-
+            #ifdef MATMUL_DEBUG
                 printf("testing: mul_mat, [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "] = [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "] * [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]\n",
                            m->ne[0],    m->ne[1],    m->ne[2],    m->ne[3],
                         x[1]->ne[0], x[1]->ne[1], x[1]->ne[2], x[1]->ne[3],
                         x[0]->ne[0], x[0]->ne[1], x[0]->ne[2], x[0]->ne[3]);
-
+            #endif
                 assert(m->ne[0] == x[1]->ne[1]);
                 assert(m->ne[1] == x[0]->ne[1]);
                 assert(m->ne[2] == x[0]->ne[2]);
@@ -389,6 +395,10 @@ int main(int argc, const char ** argv) {
         }
         ggml_free(ctx0);
     }
+
+    const int64_t t_end = ggml_time_us();
+    printf("%s: total time = %f ms, average time = %f ms\n", __func__, 
+            (t_end - t_start) / 1000.0, (t_end - t_start) / 1000.0 / niter);
 
     return 0;
 }
