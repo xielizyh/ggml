@@ -1469,23 +1469,7 @@ static void ggml_vec_dot_f16(int n, float * restrict s, size_t bs, ggml_fp16_t *
 
     ggml_float sumf = 0.0;
 
-#if GGML_USE_RKNN
-#include "rknn/rknn_wrap.h"
-    #define GGML_RKNN_F16_STEP   (2048)
-    const int np = (n & ~(GGML_RKNN_F16_STEP - 1));
-    float sum;
-
-    for (int i = 0; i < np; i += GGML_RKNN_F16_STEP) {
-        rknn_vec_dot_f16(&x[i], &y[i], &sum, GGML_RKNN_F16_STEP);
-        sumf += (ggml_float)sum;
-    }
-
-    // leftovers
-    for (int i = np; i < n; ++i) {
-        sumf += (ggml_float)(GGML_FP16_TO_FP32(x[i])*GGML_FP16_TO_FP32(y[i]));
-    }
-    // printf("rknn_vec_dot_f16: %f\n", sumf);
-#elif defined(GGML_SIMD)
+#if defined(GGML_SIMD)
     const int np = (n & ~(GGML_F16_STEP - 1));
 
     GGML_F16_VEC sum[GGML_F16_ARR] = { GGML_F16_VEC_ZERO };
@@ -7502,6 +7486,47 @@ UseGgmlGemm1:;
         return;
     }
 UseGgmlGemm2:;
+#endif
+
+#ifdef GGML_USE_RKNN
+    #include "rknn/rknn_wrap.h"
+    bool use_rknn = (vec_dot_type == GGML_TYPE_F16);
+    if (use_rknn) { // RKNN只支持FP16 * FP16
+        printf("use rknn\n");
+
+        // broadcast factors
+        const int64_t r2 = ne12 / ne02;
+        const int64_t r3 = ne13 / ne03;
+
+        // tensor A
+        printf("ne00=%ld, ne01=%ld, ne02=%ld, ne03=%ld\n", ne00, ne01, ne02, ne03);     // number of elements
+        printf("nb00=%ld, nb01=%ld, nb02=%ld, nb03=%ld\n", nb00, nb01, nb02, nb03);     // stride in bytes
+        printf("\n");
+        // tensor B
+        printf("ne10=%ld, ne11=%ld, ne12=%ld, ne13=%ld\n", ne10, ne11, ne12, ne13);     // number of elements
+        printf("nb10=%ld, nb11=%ld, nb12=%ld, nb13=%ld\n", nb10, nb11, nb12, nb13);     // stride in bytes
+        printf("\n");
+        // tensor C: number of elements
+        printf("ne0=%ld, ne1=%ld, ne2=%ld, ne3=%ld\n", ne0, ne1, ne2, ne3);             // number of elements
+        printf("nb0=%ld, nb1=%ld, nb2=%ld, nb3=%ld\n", nb0, nb1, nb2, nb3);             // stride in bytes
+        printf("\n");
+
+        for (int64_t i13 = 0; i13 < ne13; i13++) {
+            for (int64_t i12 = 0; i12 < ne12; i12++) {
+                ggml_fp16_t * A = (ggml_fp16_t *)((char *)src0->data + i12/r2*nb02 + i13/r3*nb03);
+                ggml_fp16_t * B = (ggml_fp16_t *)((char *)src1->data + i12*nb12 + i13*nb13);
+                float * C = (float *)((char *)dst->data + i12*nb2 + i13*nb3);
+                
+                int ret = rknn_matrix_mul_f16(A, B, C, ne01, ne00/ggml_blck_size(src0->type), ne11);
+                if (ret != 0) {
+                    goto UseGgmlCPU;
+                }
+            }
+        }
+        return;
+    }
+UseGgmlCPU:
+    printf("Not use rknn\n");
 #endif
 
     // This is the size of the first dimension of the result, so we can iterate that way. (see the ASSERT above, these are the same numbers)
