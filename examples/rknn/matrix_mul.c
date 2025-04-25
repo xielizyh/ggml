@@ -17,7 +17,7 @@
 // 矩阵乘法类型
 #define MATMUL_FP16
 // 调试，开启打印
-// #define MATMUL_DEBUG
+#define MATMUL_DEBUG
 
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
@@ -31,7 +31,8 @@ void get_random_dims(int64_t * dims, int ndims) {
     dims[0] = dims[1] = dims[2] = dims[3] = 1;
 
     for (int i = 0; i < ndims; i++) {
-        dims[i] = 1 + irand(4);
+        // dims[i] = 1 + irand(4);
+        dims[i] = 32;
     }
 }
 
@@ -62,6 +63,7 @@ struct ggml_tensor * get_random_tensor(
                 for (int i0 = 0; i0 < ne[0]; i0++) {
                 #ifdef MATMUL_FP16
                     ((ggml_fp16_t *)result->data)[i1*ne[0] + i0] = ggml_fp32_to_fp16(frand()*(fmax - fmin) + fmin);
+                    // ((ggml_fp16_t *)result->data)[i1*ne[0] + i0] = ggml_fp32_to_fp16(0.01f*i0);
                 #else
                     ((float *)result->data)[i1*ne[0] + i0] = frand()*(fmax - fmin) + fmin;
                 #endif
