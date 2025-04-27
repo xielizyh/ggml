@@ -7497,20 +7497,23 @@ UseGgmlGemm2:;
         // broadcast factors
         const int64_t r2 = ne12 / ne02;
         const int64_t r3 = ne13 / ne03;
-
+    #if 0
         // tensor A
+        printf("tensor A:\n");
         printf("ne00=%ld, ne01=%ld, ne02=%ld, ne03=%ld\n", ne00, ne01, ne02, ne03);     // number of elements
-        printf("nb00=%ld, nb01=%ld, nb02=%ld, nb03=%ld\n", nb00, nb01, nb02, nb03);     // stride in bytes
+        // printf("nb00=%ld, nb01=%ld, nb02=%ld, nb03=%ld\n", nb00, nb01, nb02, nb03);     // stride in bytes
         printf("\n");
         // tensor B
+        printf("tensor B:\n");
         printf("ne10=%ld, ne11=%ld, ne12=%ld, ne13=%ld\n", ne10, ne11, ne12, ne13);     // number of elements
-        printf("nb10=%ld, nb11=%ld, nb12=%ld, nb13=%ld\n", nb10, nb11, nb12, nb13);     // stride in bytes
+        // printf("nb10=%ld, nb11=%ld, nb12=%ld, nb13=%ld\n", nb10, nb11, nb12, nb13);     // stride in bytes
         printf("\n");
         // tensor C: number of elements
+        printf("tensor C:\n");
         printf("ne0=%ld, ne1=%ld, ne2=%ld, ne3=%ld\n", ne0, ne1, ne2, ne3);             // number of elements
-        printf("nb0=%ld, nb1=%ld, nb2=%ld, nb3=%ld\n", nb0, nb1, nb2, nb3);             // stride in bytes
+        // printf("nb0=%ld, nb1=%ld, nb2=%ld, nb3=%ld\n", nb0, nb1, nb2, nb3);             // stride in bytes
         printf("\n");
-
+    #endif
         for (int64_t i13 = 0; i13 < ne13; i13++) {
             for (int64_t i12 = 0; i12 < ne12; i12++) {
                 ggml_fp16_t * A = (ggml_fp16_t *)((char *)src0->data + i12/r2*nb02 + i13/r3*nb03);

@@ -55,14 +55,20 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
     /* 初始化矩阵信息 */
     memset(&info, 0, sizeof(rknn_matmul_info));
     info.M = M;
-    info.K = N; //GGML矩阵乘法是将B矩阵进行了转置
+    info.K = N; //!!! GGML矩阵乘法是将B矩阵进行了转置
     info.N = K;
     info.type = matmul_type;
     info.B_layout = B_layout;
     info.AC_layout = AC_layout;
     info.iommu_domain_id = 0;
     
-    printf("M=%d, K=%d, N=%d\n", M, K, N);
+    // RKNN矩阵乘法限制：1. fp16; 2. K < 2048; 3. K和N必须是32倍数，且大于等于32
+    if (info.K % 32 || info.K > 2048 || info.N % 32) {
+        fprintf(stderr, "RKNN: K=%d, N=%d is not supported!\n", info.K, info.N);
+        return -1;
+    }
+    
+    // printf("M=%d, K=%d, N=%d\n", M, K, N);
     // print_fp16_matrix("A", (ggml_fp16_t*)A_Matrix, M, K);
     // print_fp16_matrix("B", (ggml_fp16_t*)B_Matrix, K, N);
 

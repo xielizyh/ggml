@@ -17,7 +17,7 @@
 // 矩阵乘法类型
 #define MATMUL_FP16
 // 调试，开启打印
-// #define MATMUL_DEBUG
+#define MATMUL_DEBUG
 
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
@@ -27,11 +27,18 @@ int irand(int n) {
     return rand()%n;
 }
 
+int irand_align32(int n) {
+    int r = (rand()%n) + 1;
+
+    return r & (~0x1F);
+}
+
 void get_random_dims(int64_t * dims, int ndims) {
     dims[0] = dims[1] = dims[2] = dims[3] = 1;
 
     for (int i = 0; i < ndims; i++) {
         // dims[i] = 1 + irand(4);
+        // dims[i] = irand_align32(2048);
         dims[i] = 32;
     }
 }
@@ -232,33 +239,33 @@ bool check_mat_mul(
     const int64_t n12 = y->ne[1];
     const int64_t n22 = y->ne[2];
     const int64_t n32 = y->ne[3];
-#ifdef MATMUL_DEBUG
-    printf("x0: [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]\n", n00, n10, n20, n30);
-    for (int j = 0; j < n10; ++j) {
-        for (int i = 0; i < n00; ++i) {
-            printf("%6.3f ", mat_get(x0, i, j, 0, 0));
-        }
-        printf("\n");
-    }
-    printf("\n");
+// #ifdef MATMUL_DEBUG
+//     printf("x0: [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]\n", n00, n10, n20, n30);
+//     for (int j = 0; j < n10; ++j) {
+//         for (int i = 0; i < n00; ++i) {
+//             printf("%6.3f ", mat_get(x0, i, j, 0, 0));
+//         }
+//         printf("\n");
+//     }
+//     printf("\n");
 
-    printf("x1: [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]\n", n01, n11, n21, n31);
-    for (int j = 0; j < n11; ++j) {
-        for (int i = 0; i < n01; ++i) {
-            printf("%6.3f ", mat_get(x1, i, j, 0, 0));
-        }
-        printf("\n");
-    }
-    printf("\n");
+//     printf("x1: [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]\n", n01, n11, n21, n31);
+//     for (int j = 0; j < n11; ++j) {
+//         for (int i = 0; i < n01; ++i) {
+//             printf("%6.3f ", mat_get(x1, i, j, 0, 0));
+//         }
+//         printf("\n");
+//     }
+//     printf("\n");
 
-    printf("y: [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]\n", n02, n12, n22, n32);
-    for (int j = 0; j < n12; ++j) {
-        for (int i = 0; i < n02; ++i) {
-            printf("%6.3f ", mat_get(y, i, j, 0, 0));
-        }
-        printf("\n");
-    }
-#endif
+//     printf("y: [%" PRId64 ", %" PRId64 ", %" PRId64 ", %" PRId64 "]\n", n02, n12, n22, n32);
+//     for (int j = 0; j < n12; ++j) {
+//         for (int i = 0; i < n02; ++i) {
+//             printf("%6.3f ", mat_get(y, i, j, 0, 0));
+//         }
+//         printf("\n");
+//     }
+// #endif
     for (int i3 = 0; i3 < n32; ++i3) {
         for (int i2 = 0; i2 < n22; ++i2) {
             for (int i1 = 0; i1 < n12; ++i1) {
@@ -318,9 +325,10 @@ int main(int argc, const char ** argv) {
         {
             const int nargs = 1;
 
-            for (int ndims = 2; ndims <= 2; ++ndims) {
+            for (int ndims = 2; ndims <= 4; ++ndims) {
                 x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
-                ne[1] = rand()%4 + 1;
+                // ne[1] = rand()%4 + 1;
+                ne[1] = 32; // TODO 由于RKNN的限制，只有x[1]的ne[1]可以为任意值，由于x[0]也用了ne数组，这里暂时只固定为32
                 x[1] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
 
                 ggml_set_param(ctx0, x[0]);
