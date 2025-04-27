@@ -6,6 +6,38 @@
 #include "rknn/include/rknn_api.h"
 #include "rknn/include/rknn_matmul_api.h"
 
+static void print_fp16_matrix(const char* name, const ggml_fp16_t* matrix, int rows, int cols) 
+{
+    printf("Matrix %s (%dx%d):\n", name, rows, cols);
+
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            float val = ggml_fp16_to_fp32(matrix[i * cols + j]);
+            printf("%6.3f ", (double)val);
+        }
+        printf("\n");
+    }
+}
+
+static void transpose_fp16(ggml_fp16_t *src, ggml_fp16_t *dst, int rows, int cols)
+{
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            dst[j * rows + i] = src[i * cols + j];
+        }
+    }
+}
+
+static void transpose_fp32(float *src, float *dst, int rows, int cols)
+{
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            dst[j * rows + i] = src[i * cols + j];
+        }
+    }
+}
+
+// GGML: C = A*B^T, C also is transposed
 int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * C_Matrix, int M, int K, int N)
 {
     int ret;
@@ -23,13 +55,17 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
     /* 初始化矩阵信息 */
     memset(&info, 0, sizeof(rknn_matmul_info));
     info.M = M;
-    info.K = K;
-    info.N = N;
+    info.K = N; //GGML矩阵乘法是将B矩阵进行了转置
+    info.N = K;
     info.type = matmul_type;
     info.B_layout = B_layout;
     info.AC_layout = AC_layout;
     info.iommu_domain_id = 0;
     
+    printf("M=%d, K=%d, N=%d\n", M, K, N);
+    // print_fp16_matrix("A", (ggml_fp16_t*)A_Matrix, M, K);
+    // print_fp16_matrix("B", (ggml_fp16_t*)B_Matrix, K, N);
+
     /* 初始化矩阵乘法上下文 */
     memset(&io_attr, 0, sizeof(rknn_matmul_io_attr));
     ret = rknn_matmul_create(&ctx, &info, &io_attr);
@@ -64,7 +100,9 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
 
     /* 拷贝到NPU内存 */
     memcpy(A->virt_addr, A_Matrix, io_attr.A.size);
-    memcpy(B->virt_addr, B_Matrix, io_attr.B.size);
+    transpose_fp16(B_Matrix, B->virt_addr, K, N);
+    // memcpy(B->virt_addr, B_Matrix, io_attr.B.size);
+    // print_fp16_matrix("B^T", (ggml_fp16_t*)B->virt_addr, N, K);
 
     /* 设置矩输入/输出内存到矩阵乘法上下文 */
     ret = rknn_matmul_set_io_mem(ctx, A, &io_attr.A);
@@ -91,7 +129,8 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
     }
 
     /* 从NPU内存拷贝到CPU内存 */
-    memcpy(C_Matrix, C->virt_addr, io_attr.C.size);
+    transpose_fp32(C->virt_addr, C_Matrix, M, K);
+    // memcpy(C_Matrix, C->virt_addr, io_attr.C.size);
 exit:
     /* 释放NPU内存 */
     rknn_destroy_mem(ctx, A);
@@ -102,10 +141,4 @@ exit:
     rknn_matmul_destroy(ctx);
 
     return ret;
-}
-
-
-int rknn_vec_dot_f16(ggml_fp16_t * x, ggml_fp16_t * y, float * s, int n)
-{
-    return rknn_matrix_mul_f16(x, y, s, 1, n, 1);
 }

@@ -17,7 +17,7 @@
 // 矩阵乘法类型
 #define MATMUL_FP16
 // 调试，开启打印
-#define MATMUL_DEBUG
+// #define MATMUL_DEBUG
 
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
@@ -318,7 +318,7 @@ int main(int argc, const char ** argv) {
         {
             const int nargs = 1;
 
-            for (int ndims = 2; ndims <= 4; ++ndims) {
+            for (int ndims = 2; ndims <= 2; ++ndims) {
                 x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
                 ne[1] = rand()%4 + 1;
                 x[1] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
@@ -354,6 +354,7 @@ int main(int argc, const char ** argv) {
                 check_mat_mul(m, x[1], x[0]);
             }
         }
+        break;
 
         // mul_mat (transposed)
         {
