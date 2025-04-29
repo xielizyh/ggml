@@ -320,7 +320,9 @@ int main(int argc, const char ** argv) {
         get_random_dims(ne, 4);
 
         struct ggml_tensor * x[MAX_NARGS];
-
+    #ifdef MATMUL_DEBUG
+        printf("********************Start to test mul mat*******************************\n");
+    #endif
         // mul_mat
         {
             const int nargs = 1;
@@ -362,8 +364,10 @@ int main(int argc, const char ** argv) {
                 check_mat_mul(m, x[1], x[0]);
             }
         }
-        break;
-
+        // break;
+    #ifdef MATMUL_DEBUG
+        printf("********************Start to test mul mat transposed********************\n");
+    #endif
         // mul_mat (transposed)
         {
             const int nargs = 1;
@@ -371,7 +375,8 @@ int main(int argc, const char ** argv) {
             for (int ndims = 2; ndims <= 4; ++ndims) {
                 x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
                 ne[1] = ne[0];
-                ne[0] = rand()%4 + 1;
+                // ne[0] = rand()%4 + 1;
+                ne[0] = 32; // TODO 同上
                 x[1] = ggml_cont(ctx0, ggml_transpose(ctx0, get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f)));
 
                 ggml_set_param(ctx0, x[0]);
