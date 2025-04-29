@@ -18,6 +18,8 @@
 #define MATMUL_FP16
 // 调试，开启打印
 #define MATMUL_DEBUG
+// 每个维度的最大元素个数
+#define MAX_ELEMENTS 32
 
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
@@ -28,18 +30,17 @@ int irand(int n) {
 }
 
 int irand_align32(int n) {
-    int r = (rand()%n) + 1;
-
-    return r & (~0x1F);
+    if (n <= 32) return 32;  // 确保最小值是32
+    
+    int r = (rand() % (n - 32 + 1)) + 32;  // 生成32到n之间的随机数
+    return r & (~0x1F);  // 确保结果是32的倍数
 }
 
 void get_random_dims(int64_t * dims, int ndims) {
     dims[0] = dims[1] = dims[2] = dims[3] = 1;
 
     for (int i = 0; i < ndims; i++) {
-        // dims[i] = 1 + irand(4);
-        // dims[i] = irand_align32(2048);
-        dims[i] = 32;
+        dims[i] = 1 + irand(MAX_ELEMENTS);
     }
 }
 
@@ -295,7 +296,7 @@ int main(int argc, const char ** argv) {
         .no_alloc   = false,
     };
 
-    int64_t ne[4];
+    int64_t ne_x1[4], ne_x0[4];
 
     // original loop: 500
     int niter = 500;
@@ -317,8 +318,6 @@ int main(int argc, const char ** argv) {
     #endif
         struct ggml_context * ctx0 = ggml_init(params);
 
-        get_random_dims(ne, 4);
-
         struct ggml_tensor * x[MAX_NARGS];
     #ifdef MATMUL_DEBUG
         printf("********************Start to test mul mat*******************************\n");
@@ -328,10 +327,20 @@ int main(int argc, const char ** argv) {
             const int nargs = 1;
 
             for (int ndims = 2; ndims <= 4; ++ndims) {
-                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
-                // ne[1] = rand()%4 + 1;
-                ne[1] = 32; // TODO 由于RKNN的限制，只有x[1]的ne[1]可以为任意值，由于x[0]也用了ne数组，这里暂时只固定为32
-                x[1] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
+                // 对于RKNN的CMN = AMK x BKN: 
+                //  1. K和N需要为32倍数，即ne_x1[0]、ne_x0[0]和ne_x0[1]需要为32的倍数
+                //  2. M可以为任意值，即ne_x1[1]可以任意
+                //  3. 对于3D/4D的情况，ne_x1[2]和ne_x1[3]可以任意
+                get_random_dims(ne_x1, 4);
+                ne_x1[0] = irand_align32(MAX_ELEMENTS);
+
+                ne_x0[1] = irand_align32(MAX_ELEMENTS);
+                ne_x0[0] = ne_x1[0];    // 满足矩阵可乘（相等）
+                ne_x0[2] = ne_x1[2];    // 满足矩阵可乘（可广播）
+                ne_x0[3] = ne_x1[3];    // 满足矩阵可乘（可广播）
+
+                x[0] = get_random_tensor(ctx0, ndims, ne_x0, -1.0f, 1.0f);
+                x[1] = get_random_tensor(ctx0, ndims, ne_x1, -1.0f, 1.0f);
 
                 ggml_set_param(ctx0, x[0]);
 
@@ -373,11 +382,16 @@ int main(int argc, const char ** argv) {
             const int nargs = 1;
 
             for (int ndims = 2; ndims <= 4; ++ndims) {
-                x[0] = get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f);
-                ne[1] = ne[0];
-                // ne[0] = rand()%4 + 1;
-                ne[0] = 32; // TODO 同上
-                x[1] = ggml_cont(ctx0, ggml_transpose(ctx0, get_random_tensor(ctx0, ndims, ne, -1.0f, 1.0f)));
+                get_random_dims(ne_x1, 4);
+                ne_x1[1] = irand_align32(MAX_ELEMENTS);
+
+                ne_x0[1] = irand_align32(MAX_ELEMENTS);
+                ne_x0[0] = ne_x1[1];    // 满足矩阵可乘（相等）
+                ne_x0[2] = ne_x1[2];    // 满足矩阵可乘（可广播）
+                ne_x0[3] = ne_x1[3];    // 满足矩阵可乘（可广播）
+
+                x[0] = get_random_tensor(ctx0, ndims, ne_x0, -1.0f, 1.0f);
+                x[1] = ggml_cont(ctx0, ggml_transpose(ctx0, get_random_tensor(ctx0, ndims, ne_x1, -1.0f, 1.0f)));
 
                 ggml_set_param(ctx0, x[0]);
 
