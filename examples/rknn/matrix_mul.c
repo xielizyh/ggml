@@ -19,9 +19,9 @@
 // 调试，开启打印
 #define MATMUL_DEBUG
 // 每个维度的最大元素个数
-#define MAX_ELEMENTS 1024
+#define MAX_ELEMENTS 128
 // 最大维度数
-#define MAX_NDIMS 2
+#define MAX_NDIMS 4
 
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
