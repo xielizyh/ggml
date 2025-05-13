@@ -7520,7 +7520,7 @@ UseGgmlGemm2:;
                 ggml_fp16_t * B = (ggml_fp16_t *)((char *)src1->data + i12*nb12 + i13*nb13);
                 float * C = (float *)((char *)dst->data + i12*nb2 + i13*nb3);
                 
-                int ret = rknn_matrix_mul_f16(A, B, C, ne01, ne00/ggml_blck_size(src0->type), ne11);
+                int ret = rknn_matrix_mul_f16(A, B, C, ne01, ne11, ne00/ggml_blck_size(src0->type));
                 if (ret != 0) {
                     goto UseGgmlCPU;
                 }
