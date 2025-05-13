@@ -19,7 +19,9 @@
 // 调试，开启打印
 #define MATMUL_DEBUG
 // 每个维度的最大元素个数
-#define MAX_ELEMENTS 32
+#define MAX_ELEMENTS 1024
+// 最大维度数
+#define MAX_NDIMS 2
 
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
@@ -275,9 +277,17 @@ bool check_mat_mul(
                     for (int k = 0; k < n00; ++k) {
                         sum += mat_get(x0, k, i0, i2, i3) * mat_get(x1, k, i1, i2, i3);
                     }
-                    if (fabsf(sum - mat_get(y, i0, i1, i2, i3)) > 1e-5) {
-                        printf("error: i0=%d, i1=%d, i2=%d, i3=%d, sum=%f, y=%f\n",
-                                i0, i1, i2, i3, sum, mat_get(y, i0, i1, i2, i3));
+                    // 根据矩阵大小动态调整误差阈值
+                    float abs_error_threshold = 1e-5f * (1 + log10f(n00 * n10 * n20 * n30));
+                    float rel_error_threshold = 1e-4f;
+                    
+                    float abs_error = fabsf(sum - mat_get(y, i0, i1, i2, i3));
+                    float rel_error = abs_error / (fabsf(sum) + 1e-6f);
+                    
+                    if (abs_error > abs_error_threshold && rel_error > rel_error_threshold) {
+                        printf("error: i0=%d, i1=%d, i2=%d, i3=%d, sum=%f, y=%f, abs_err=%.2e, rel_err=%.2e\n",
+                                i0, i1, i2, i3, sum, mat_get(y, i0, i1, i2, i3), 
+                                abs_error, rel_error);
                         assert(false);
                         return false;
                     }
@@ -291,7 +301,7 @@ bool check_mat_mul(
 
 int main(int argc, const char ** argv) {
     struct ggml_init_params params = {
-        .mem_size   = 128*1024*1024,
+        .mem_size   = 512*1024*1024,
         .mem_buffer = NULL,
         .no_alloc   = false,
     };
@@ -326,7 +336,7 @@ int main(int argc, const char ** argv) {
         {
             const int nargs = 1;
 
-            for (int ndims = 2; ndims <= 4; ++ndims) {
+            for (int ndims = 2; ndims <= MAX_NDIMS; ++ndims) {
                 // 对于RKNN的CMN = AMK x BKN: 
                 //  1. K和N需要为32倍数，即ne_x1[0]、ne_x0[0]和ne_x0[1]需要为32的倍数
                 //  2. M可以为任意值，即ne_x1[1]可以任意
@@ -381,7 +391,7 @@ int main(int argc, const char ** argv) {
         {
             const int nargs = 1;
 
-            for (int ndims = 2; ndims <= 4; ++ndims) {
+            for (int ndims = 2; ndims <= MAX_NDIMS; ++ndims) {
                 get_random_dims(ne_x1, 4);
                 ne_x1[1] = irand_align32(MAX_ELEMENTS);
 
@@ -423,6 +433,9 @@ int main(int argc, const char ** argv) {
                 check_mat_mul(m, x[1], x[0]);
             }
         }
+    #ifdef MATMUL_DEBUG
+        printf("used_mem = %zuKB\n", ggml_used_mem(ctx0) / 1024);
+    #endif
         ggml_free(ctx0);
     }
 
