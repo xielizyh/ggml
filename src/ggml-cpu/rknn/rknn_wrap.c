@@ -28,6 +28,49 @@ static void transpose_fp16(ggml_fp16_t *src, ggml_fp16_t *dst, int rows, int col
     }
 }
 
+static void copy_and_pad_fp16(ggml_fp16_t *src, ggml_fp16_t *dst, int rows, int cols, int padded_rows, int padded_cols)
+{
+    // 填充原始数据部分
+    for (int i = 0; i < rows; i++) {
+        for (int j = 0; j < cols; j++) {
+            dst[i * padded_cols + j] = src[i * cols + j];
+        }
+        // 填充行右侧的0
+        for (int j = cols; j < padded_cols; j++) {
+            dst[i * padded_cols + j] = ggml_fp32_to_fp16(0.0f);
+        }
+    }
+
+    // 填充新增行的0
+    for (int i = rows; i < padded_rows; i++) {
+        for (int j = 0; j < padded_cols; j++) {
+            dst[j * padded_cols + i] = ggml_fp32_to_fp16(0.0f);
+        }
+    }
+}
+
+static void transpose_and_pad_fp16(ggml_fp16_t *src, ggml_fp16_t *dst, int rows, int cols, int padded_rows, int padded_cols)
+{
+    for (int i = 0; i < padded_rows; ++i) {
+        for (int j = 0; j < padded_cols; ++j) {
+            if (i < rows && j < cols) {
+                dst[j * padded_rows + i] = src[i * cols + j];
+            } else {
+                dst[j * padded_rows + i] = ggml_fp32_to_fp16(0.0f);
+            }
+        }
+    }
+}
+
+static void transpose_and_unpad_fp32(float *src, float *dst, int rows, int cols, int unpadded_rows, int unpadded_cols)
+{
+    for (int i = 0; i < unpadded_rows; ++i) {
+        for (int j = 0; j < unpadded_cols; ++j) {
+            dst[j * unpadded_rows + i] = src[i * cols + j];
+        }
+    }
+}
+
 static void transpose_fp32(float *src, float *dst, int rows, int cols)
 {
     for (int i = 0; i < rows; ++i) {
@@ -35,6 +78,11 @@ static void transpose_fp32(float *src, float *dst, int rows, int cols)
             dst[j * rows + i] = src[i * cols + j];
         }
     }
+}
+
+static int dim_align32(int dim)
+{
+    return (dim + 31) & (~31);
 }
 
 // GGML: C = A*B^T, C also is transposed
@@ -61,12 +109,21 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
     info.B_layout = B_layout;
     info.AC_layout = AC_layout;
     info.iommu_domain_id = 0;
-    
+ #if 0   
     // RKNN矩阵乘法限制：1. fp16; 2. K < 2048; 3. K和N必须是32倍数，且大于等于32
     if (info.K % 32 || info.K > 2048 || info.N % 32) {
         fprintf(stderr, "RKNN: K=%d, N=%d is not supported!\n", info.K, info.N);
         return -1;
     }
+#else   // 支持任意K和N
+    if (info.K > 2048) {
+        fprintf(stderr, "RKNN: K=%d(must be <=2048) is not supported!\n", info.K);
+        return -1;
+    }
+    
+    info.K = dim_align32(info.K);
+    info.N = dim_align32(info.N);
+#endif
     
     // printf("M=%d, K=%d, N=%d\n", M, K, N);
     // print_fp16_matrix("A", (ggml_fp16_t*)A_Matrix, M, K);
@@ -105,10 +162,13 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
     }
 
     /* 拷贝到NPU内存 */
-    memcpy(A->virt_addr, A_Matrix, io_attr.A.size);
-    transpose_fp16(B_Matrix, B->virt_addr, K, N);
+    // memcpy(A->virt_addr, A_Matrix, io_attr.A.size);
+    // transpose_fp16(B_Matrix, B->virt_addr, K, N);
     // memcpy(B->virt_addr, B_Matrix, io_attr.B.size);
-    // print_fp16_matrix("B^T", (ggml_fp16_t*)B->virt_addr, N, K);
+    copy_and_pad_fp16(A_Matrix, A->virt_addr, M, N, info.M, info.K);
+    transpose_and_pad_fp16(B_Matrix, B->virt_addr, K, N, info.N, info.K);
+    // print_fp16_matrix("A", (ggml_fp16_t*)A->virt_addr, info.M, info.K);
+    // print_fp16_matrix("B^T", (ggml_fp16_t*)B->virt_addr, info.K, info.N);
 
     /* 设置矩输入/输出内存到矩阵乘法上下文 */
     ret = rknn_matmul_set_io_mem(ctx, A, &io_attr.A);
@@ -135,8 +195,11 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
     }
 
     /* 从NPU内存拷贝到CPU内存 */
-    transpose_fp32(C->virt_addr, C_Matrix, M, K);
+    // transpose_fp32(C->virt_addr, C_Matrix, info.M, info.N);
     // memcpy(C_Matrix, C->virt_addr, io_attr.C.size);
+    transpose_and_unpad_fp32(C->virt_addr, C_Matrix, info.M, info.N, M, K);
+    // print_fp16_matrix("C", (ggml_fp16_t*)C->virt_addr, info.M, info.N);
+    // print_fp16_matrix("C", (ggml_fp16_t*)C_Matrix, M, K);
 exit:
     /* 释放NPU内存 */
     rknn_destroy_mem(ctx, A);
