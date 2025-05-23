@@ -60,6 +60,8 @@ static void matrix_pad_and_transpose(const float* src, float* dst, int rows, int
 // 先转置再去填充：unpad_rows原始矩阵要去填充的行数，unpad_cols原始矩阵要去填充的列数
 static void matrix_unpad_and_transpose(const float* src, float* dst, int rows, int cols, int unpad_rows, int unpad_cols)
 {
+    (void)(rows);
+    
     for (int i = 0; i < unpad_rows; ++i) {
         for (int j = 0; j < unpad_cols; ++j) {
             dst[j * unpad_rows + i] = src[i * cols + j];

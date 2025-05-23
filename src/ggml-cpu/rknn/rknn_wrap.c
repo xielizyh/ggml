@@ -6,7 +6,18 @@
 #include "rknn/include/rknn_api.h"
 #include "rknn/include/rknn_matmul_api.h"
 
-static void print_fp16_matrix(const char* name, const ggml_fp16_t* matrix, int rows, int cols) 
+static void matrix_print(const char* name, const float* matrix, int rows, int cols)
+{
+    printf("Matrix %s (%dx%d):\n", name, rows, cols);
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            printf("%6.3f ", (double)matrix[i * cols + j]);
+        }
+        printf("\n");
+    }
+}
+
+static void matrix_print_fp16(const char* name, const ggml_fp16_t* matrix, int rows, int cols) 
 {
     printf("Matrix %s (%dx%d):\n", name, rows, cols);
 
@@ -19,7 +30,7 @@ static void print_fp16_matrix(const char* name, const ggml_fp16_t* matrix, int r
     }
 }
 
-static void transpose_fp16(ggml_fp16_t *src, ggml_fp16_t *dst, int rows, int cols)
+static void matrix_transpose_fp16(const ggml_fp16_t* src, ggml_fp16_t* dst, int rows, int cols)
 {
     for (int i = 0; i < rows; ++i) {
         for (int j = 0; j < cols; ++j) {
@@ -28,54 +39,41 @@ static void transpose_fp16(ggml_fp16_t *src, ggml_fp16_t *dst, int rows, int col
     }
 }
 
-static void copy_and_pad_fp16(ggml_fp16_t *src, ggml_fp16_t *dst, int rows, int cols, int padded_rows, int padded_cols)
+static void matrix_pad_fp16(const ggml_fp16_t* src, ggml_fp16_t* dst, int rows, int cols, int pad_rows, int pad_cols)
 {
-    // 填充原始数据部分
-    for (int i = 0; i < rows; i++) {
-        for (int j = 0; j < cols; j++) {
-            dst[i * padded_cols + j] = src[i * cols + j];
-        }
-        // 填充行右侧的0
-        for (int j = cols; j < padded_cols; j++) {
-            dst[i * padded_cols + j] = ggml_fp32_to_fp16(0.0f);
-        }
-    }
-
-    // 填充新增行的0
-    for (int i = rows; i < padded_rows; i++) {
-        for (int j = 0; j < padded_cols; j++) {
-            dst[j * padded_cols + i] = ggml_fp32_to_fp16(0.0f);
-        }
-    }
-}
-
-static void transpose_and_pad_fp16(ggml_fp16_t *src, ggml_fp16_t *dst, int rows, int cols, int padded_rows, int padded_cols)
-{
-    for (int i = 0; i < padded_rows; ++i) {
-        for (int j = 0; j < padded_cols; ++j) {
+    for (int i = 0; i < pad_rows; ++i) {
+        for (int j = 0; j < pad_cols; ++j) {
             if (i < rows && j < cols) {
-                dst[j * padded_rows + i] = src[i * cols + j];
+                dst[i * pad_cols + j] = src[i * cols + j];
             } else {
-                dst[j * padded_rows + i] = ggml_fp32_to_fp16(0.0f);
+                dst[i * pad_cols + j] = ggml_fp32_to_fp16(0.0f);
             }
         }
     }
 }
 
-static void transpose_and_unpad_fp32(float *src, float *dst, int rows, int cols, int unpadded_rows, int unpadded_cols)
+// 先填充再转置：pad_rows原始矩阵要填充的行数，pad_cols原始矩阵要填充的列数
+static void matrix_pad_and_transpose_fp16(const ggml_fp16_t* src, ggml_fp16_t* dst, int rows, int cols, int pad_rows, int pad_cols)
 {
-    for (int i = 0; i < unpadded_rows; ++i) {
-        for (int j = 0; j < unpadded_cols; ++j) {
-            dst[j * unpadded_rows + i] = src[i * cols + j];
+    for (int i = 0; i < pad_rows; ++i) {
+        for (int j = 0; j < pad_cols; ++j) {
+            if (i < rows && j < cols) {
+                dst[j * pad_rows + i] = src[i * cols + j];
+            } else {
+                dst[j * pad_rows + i] = ggml_fp32_to_fp16(0.0f);
+            }
         }
     }
 }
 
-static void transpose_fp32(float *src, float *dst, int rows, int cols)
+// 先转置再去填充：unpad_rows原始矩阵要去填充的行数，unpad_cols原始矩阵要去填充的列数
+static void matrix_unpad_and_transpose(const float* src, float* dst, int rows, int cols, int unpad_rows, int unpad_cols)
 {
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            dst[j * rows + i] = src[i * cols + j];
+    (void)(rows);
+
+    for (int i = 0; i < unpad_rows; ++i) {
+        for (int j = 0; j < unpad_cols; ++j) {
+            dst[j * unpad_rows + i] = src[i * cols + j];
         }
     }
 }
@@ -103,7 +101,7 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
     /* 初始化矩阵信息 */
     memset(&info, 0, sizeof(rknn_matmul_info));
     info.M = M;
-    info.K = N; //!!! GGML矩阵乘法是将B矩阵进行了转置
+    info.K = N; //!!! GGML矩阵乘法是需要将B矩阵转置后再进行乘法运算，所以这里的K和N需要交换
     info.N = K;
     info.type = matmul_type;
     info.B_layout = B_layout;
@@ -126,8 +124,8 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
 #endif
     
     // printf("M=%d, K=%d, N=%d\n", M, K, N);
-    // print_fp16_matrix("A", (ggml_fp16_t*)A_Matrix, M, K);
-    // print_fp16_matrix("B", (ggml_fp16_t*)B_Matrix, K, N);
+    // matrix_print_fp16("A", (ggml_fp16_t*)A_Matrix, M, K);
+    // matrix_print_fp16("B", (ggml_fp16_t*)B_Matrix, K, N);
 
     /* 初始化矩阵乘法上下文 */
     memset(&io_attr, 0, sizeof(rknn_matmul_io_attr));
@@ -164,11 +162,10 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
     /* 拷贝到NPU内存 */
     // memcpy(A->virt_addr, A_Matrix, io_attr.A.size);
     // transpose_fp16(B_Matrix, B->virt_addr, K, N);
-    // memcpy(B->virt_addr, B_Matrix, io_attr.B.size);
-    copy_and_pad_fp16(A_Matrix, A->virt_addr, M, N, info.M, info.K);
-    transpose_and_pad_fp16(B_Matrix, B->virt_addr, K, N, info.N, info.K);
-    // print_fp16_matrix("A", (ggml_fp16_t*)A->virt_addr, info.M, info.K);
-    // print_fp16_matrix("B^T", (ggml_fp16_t*)B->virt_addr, info.K, info.N);
+    matrix_pad_fp16(A_Matrix, A->virt_addr, M, N, info.M, info.K);
+    matrix_pad_and_transpose_fp16(B_Matrix, B->virt_addr, K, N, info.N, info.K);
+    // matrix_print_fp16("A", (ggml_fp16_t*)A->virt_addr, info.M, info.K);
+    // matrix_print_fp16("B^T", (ggml_fp16_t*)B->virt_addr, info.K, info.N);
 
     /* 设置矩输入/输出内存到矩阵乘法上下文 */
     ret = rknn_matmul_set_io_mem(ctx, A, &io_attr.A);
@@ -196,10 +193,8 @@ int rknn_matrix_mul_f16(ggml_fp16_t * A_Matrix, ggml_fp16_t * B_Matrix, float * 
 
     /* 从NPU内存拷贝到CPU内存 */
     // transpose_fp32(C->virt_addr, C_Matrix, info.M, info.N);
-    // memcpy(C_Matrix, C->virt_addr, io_attr.C.size);
-    transpose_and_unpad_fp32(C->virt_addr, C_Matrix, info.M, info.N, M, K);
-    // print_fp16_matrix("C", (ggml_fp16_t*)C->virt_addr, info.M, info.N);
-    // print_fp16_matrix("C", (ggml_fp16_t*)C_Matrix, M, K);
+    matrix_unpad_and_transpose(C->virt_addr, C_Matrix, info.M, info.N, M, K);
+    // matrix_print("C", C_Matrix, M, K);
 exit:
     /* 释放NPU内存 */
     rknn_destroy_mem(ctx, A);
