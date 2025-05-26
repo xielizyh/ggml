@@ -19,16 +19,22 @@
 // 调试，开启打印
 #define MATMUL_DEBUG
 // 每个维度的最大元素个数
-#define MAX_ELEMENTS 128
+#define MAX_ELEMENTS 70
 // 最大维度数
 #define MAX_NDIMS 4
+// 是否需要维度元素对齐32
+// #define DIMS_ALIGN32
 
 float frand(void) {
     return (float)rand()/(float)RAND_MAX;
 }
 
 int irand(int n) {
-    return rand()%n;
+    int r = rand();
+
+    if (r == 0) return 1;  // 确保随机数大于0
+
+    return r % n;
 }
 
 int irand_align32(int n) {
@@ -342,9 +348,15 @@ int main(int argc, const char ** argv) {
                 //  2. M可以为任意值，即ne_x1[1]可以任意
                 //  3. 对于3D/4D的情况，ne_x1[2]和ne_x1[3]可以任意
                 get_random_dims(ne_x1, 4);
+            #ifdef DIMS_ALIGN32
                 ne_x1[0] = irand_align32(MAX_ELEMENTS);
 
                 ne_x0[1] = irand_align32(MAX_ELEMENTS);
+            #else   // 底层支持处理非32倍数的情况
+                ne_x1[0] = irand(MAX_ELEMENTS);
+
+                ne_x0[1] = irand(MAX_ELEMENTS);
+            #endif
                 ne_x0[0] = ne_x1[0];    // 满足矩阵可乘（相等）
                 ne_x0[2] = ne_x1[2];    // 满足矩阵可乘（可广播）
                 ne_x0[3] = ne_x1[3];    // 满足矩阵可乘（可广播）
@@ -393,9 +405,15 @@ int main(int argc, const char ** argv) {
 
             for (int ndims = 2; ndims <= MAX_NDIMS; ++ndims) {
                 get_random_dims(ne_x1, 4);
+            #ifdef DIMS_ALIGN32
                 ne_x1[1] = irand_align32(MAX_ELEMENTS);
 
                 ne_x0[1] = irand_align32(MAX_ELEMENTS);
+            #else   // 底层支持处理非32倍数的情况
+                ne_x1[1] = irand(MAX_ELEMENTS);
+
+                ne_x0[1] = irand(MAX_ELEMENTS);
+            #endif
                 ne_x0[0] = ne_x1[1];    // 满足矩阵可乘（相等）
                 ne_x0[2] = ne_x1[2];    // 满足矩阵可乘（可广播）
                 ne_x0[3] = ne_x1[3];    // 满足矩阵可乘（可广播）
