@@ -7495,8 +7495,8 @@ UseGgmlGemm2:;
         printf("use rknn\n");
 
         // broadcast factors
-        const int64_t r2 = ne12 / ne02;
-        const int64_t r3 = ne13 / ne03;
+        const int64_t r2_x = ne12 / ne02;
+        const int64_t r3_x = ne13 / ne03;
     #if 0
         // tensor A
         printf("tensor A:\n");
@@ -7516,7 +7516,7 @@ UseGgmlGemm2:;
     #endif
         for (int64_t i13 = 0; i13 < ne13; i13++) {
             for (int64_t i12 = 0; i12 < ne12; i12++) {
-                ggml_fp16_t * A = (ggml_fp16_t *)((char *)src0->data + i12/r2*nb02 + i13/r3*nb03);
+                ggml_fp16_t * A = (ggml_fp16_t *)((char *)src0->data + i12/r2_x*nb02 + i13/r3_x*nb03);
                 ggml_fp16_t * B = (ggml_fp16_t *)((char *)src1->data + i12*nb12 + i13*nb13);
                 float * C = (float *)((char *)dst->data + i12*nb2 + i13*nb3);
                 

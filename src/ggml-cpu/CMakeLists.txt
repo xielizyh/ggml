@@ -23,21 +23,25 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         ggml-cpu/amx/mmq.cpp
         ggml-cpu/amx/mmq.h
         ggml-cpu/ggml-cpu-impl.h
-        ggml-cpu/rknn/rknn_wrap.c
-        ggml-cpu/rknn/include/rknn_api.h
-        ggml-cpu/rknn/include/rknn_matmul_api.h
         )
 
     target_compile_features(${GGML_CPU_NAME} PRIVATE c_std_11 cxx_std_17)
     target_include_directories(${GGML_CPU_NAME} PRIVATE . ggml-cpu)
 
     if (GGML_RKNN)
-        message(STATUS "Using RKNN")
-        set(RKNN_API_PATH ${CMAKE_CURRENT_SOURCE_DIR}/ggml-cpu/rknn)
-        set(RKNN_RT_LIB ${RKNN_API_PATH}/librknnrt.so)
-        target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_RKNN)
-        target_link_libraries(${GGML_CPU_NAME} PRIVATE ${RKNN_RT_LIB})
-        # message(STATUS "RKNN_RT_LIB: ${RKNN_RT_LIB}")
+        find_library(RKNN_RT_LIB rknnrt ${CMAKE_CURRENT_SOURCE_DIR}/ggml-cpu/rknn)
+        if (RKNN_RT_LIB)
+            message(STATUS "RKNN runtime library found: ${RKNN_RT_LIB}")
+            target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_RKNN)
+            target_link_libraries(${GGML_CPU_NAME} PRIVATE ${RKNN_RT_LIB})
+            
+            list(APPEND GGML_CPU_SOURCES
+                ggml-cpu/rknn/rknn_wrap.c
+                ggml-cpu/rknn/include/rknn_api.h
+                ggml-cpu/rknn/include/rknn_matmul_api.h)
+        else()
+            message(WARNING "RKNN runtime library not found")
+        endif()
     endif()
 
     if (APPLE AND GGML_ACCELERATE)
