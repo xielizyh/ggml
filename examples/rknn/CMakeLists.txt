@@ -10,4 +10,4 @@ target_link_libraries(${TEST_TARGET} PRIVATE ggml)
 # matrix_mul
 set(TEST_TARGET matrix_mul)
 add_executable(${TEST_TARGET} matrix_mul.c)
-target_link_libraries(${TEST_TARGET} PRIVATE ggml)
+target_link_libraries(${TEST_TARGET} PRIVATE ggml m)
