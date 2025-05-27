@@ -190,7 +190,7 @@ option(GGML_BUILD_TESTS    "ggml: build tests"    ${GGML_STANDALONE})
 option(GGML_BUILD_EXAMPLES "ggml: build examples" ${GGML_STANDALONE})
 
 # RKNN
-option(GGML_RKNN                            "ggml: rknn npu accelerate"                       ON)
+option(GGML_RKNN                            "ggml: rknn npu accelerate"                       OFF)
 
 #
 # dependencies
