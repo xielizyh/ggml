@@ -33,8 +33,8 @@ function(ggml_add_cpu_backend_variant_impl tag_name)
         if (RKNN_RT_LIB)
             message(STATUS "RKNN runtime library found: ${RKNN_RT_LIB}")
             target_compile_definitions(${GGML_CPU_NAME} PRIVATE GGML_USE_RKNN)
-            target_link_libraries(${GGML_CPU_NAME} PRIVATE ${RKNN_RT_LIB})
-            
+            # 注意使用 PUBLIC 而不是 PRIVATE，便于其他其他目标也可见
+            target_link_libraries(${GGML_CPU_NAME} PUBLIC ${RKNN_RT_LIB})
             list(APPEND GGML_CPU_SOURCES
                 ggml-cpu/rknn/rknn_wrap.c
                 ggml-cpu/rknn/include/rknn_api.h
